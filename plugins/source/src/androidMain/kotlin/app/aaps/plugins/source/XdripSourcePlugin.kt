@@ -191,7 +191,9 @@ class XdripSourcePlugin(
                 aapsLogger.warn(LTag.BGSOURCE, "Skipping xDrip bundle: missing glucoseValue")
                 return
             }
-            xdripSourcePlugin.sensorBatteryLevel = bundle.getInt(Intents.EXTRA_SENSOR_BATTERY, -1)
+            // xDrip sends the bridge or reader battery in %. It shows it itself only when above 0, and sets 0
+            // when there is no such device (Libre 2 direct), so 0 or less means "not reported".
+            xdripSourcePlugin.sensorBatteryLevel = bundle.getInt(Intents.EXTRA_SENSOR_BATTERY, -1).takeIf { it > 0 } ?: -1
         }
     }
 }

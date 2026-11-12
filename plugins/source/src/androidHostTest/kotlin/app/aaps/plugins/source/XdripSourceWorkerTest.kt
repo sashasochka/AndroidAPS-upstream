@@ -13,6 +13,7 @@ import app.aaps.core.keys.BooleanKey
 import app.aaps.core.utils.receivers.DataInbox
 import app.aaps.shared.tests.BundleMock
 import app.aaps.shared.tests.TestBaseWithProfile
+import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -152,6 +154,44 @@ class XdripSourceWorkerTest : TestBaseWithProfile() {
             Assertions.assertEquals(ListenableWorker.Result.success(), result)
             verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), any())
         }
+    }
+
+    @Test
+    fun `When sensor battery is 0 then it is not reported`() {
+        assertThat(batteryAfter(0)).isEqualTo(-1)
+    }
+
+    @Test
+    fun `When sensor battery is negative then it is not reported`() {
+        assertThat(batteryAfter(-5)).isEqualTo(-1)
+    }
+
+    @Test
+    fun `When sensor battery is reported then it is kept`() {
+        assertThat(batteryAfter(45)).isEqualTo(45)
+    }
+
+    @Test
+    fun `When sensor battery is missing then it is not reported`() {
+        assertThat(batteryAfter(null)).isEqualTo(-1)
+    }
+
+    /** Runs one valid reading with [battery] (none when null) and returns the level the plugin was given. */
+    private fun batteryAfter(battery: Int?): Int {
+        var level: Int? = null
+        runTest {
+            whenever(xdripSourcePlugin.isEnabled()).thenReturn(true)
+            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(PersistenceLayer.TransactionResult())
+            val bundle = validBundle(now - 60000, 150.0).apply { if (battery != null) putInt(Intents.EXTRA_SENSOR_BATTERY, battery) }
+            whenever(dataInbox.drain(eq(XdripInbox))).thenReturn(listOf(bundle))
+
+            worker.doWork()
+
+            val captor = argumentCaptor<Int>()
+            verify(xdripSourcePlugin).sensorBatteryLevel = captor.capture()
+            level = captor.firstValue
+        }
+        return level!!
     }
 
     private fun validBundle(timestamp: Long, bg: Double) = BundleMock.mocked().apply {
