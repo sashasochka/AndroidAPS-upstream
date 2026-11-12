@@ -2,9 +2,11 @@ package app.aaps.settingsstore
 
 import app.aaps.shared.impl.sharedPreferences.StoreUnreadableException
 import com.google.common.truth.Truth.assertThat
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.io.IOException
 import java.security.KeyStoreException
 
 /**
@@ -139,6 +141,71 @@ class AndroidStorageTest {
             assertThat(opened.failure).isNull()
             // Not the settings of the day of the move: those can be dangerously old.
             assertThat(opened.store.getAll()).isEmpty()
+        }
+    }
+
+    @Test
+    fun `start fresh never brings the old settings back, also when the move was not marked done`() {
+        oldFile.writeText("<map/>")
+        oldValues = mapOf("pod_state" to "a pod long gone")
+        opened { }
+        // As after a start whose marker was never written: the store is there, the marker is not.
+        assertThat(File(store, "preferences.store.moved").delete()).isTrue()
+        keys.delete()
+        opened { assertThat(it.failure).isInstanceOf(StoreUnreadableException::class.java) }
+
+        AndroidStorage.startFreshWith(setup())
+
+        opened { opened ->
+            assertThat(opened.failure).isNull()
+            assertThat(opened.store.getAll()).isEmpty()
+        }
+    }
+
+    @Test
+    fun `start fresh that cannot mark the move done leaves the store and its key alone`() {
+        opened { it.store.edit(commit = true) { putString("a", "1") } }
+        assertThat(File(store, "preferences.store.moved").delete()).isTrue()
+        File(store, "preferences.store.moved.new").mkdir()
+        val before = storeFile().readBytes()
+        val key = keys.key
+
+        assertThrows(IOException::class.java) { AndroidStorage.startFreshWith(setup()) }
+
+        assertThat(storeFile().readBytes()).isEqualTo(before)
+        assertThat(keys.key).isSameInstanceAs(key)
+    }
+
+    @Test
+    fun `two start fresh in the same second keep both files set aside`() {
+        opened { it.store.edit(commit = true) { putString("a", "1") } }
+        val first = AndroidStorage.startFreshWith(setup())
+        opened { it.store.edit(commit = true) { putString("b", "2") } }
+
+        val second = AndroidStorage.startFreshWith(setup())
+
+        // The names differ even when both resets share their timestamp, which is the case that overwrote.
+        assertThat(second.name.substringBeforeLast('-')).isNotEqualTo(first.name.substringBeforeLast('-'))
+        assertThat(first.exists()).isTrue()
+        assertThat(second.exists()).isTrue()
+    }
+
+    @Test
+    fun `start fresh before any store was written still moves the old settings on the next good open`() {
+        // The first start after the update: the Keystore does not answer, so no store file is ever written,
+        // and the old settings are still the user's current ones.
+        oldFile.writeText("<map/>")
+        oldValues = mapOf("units" to "mmol")
+        keys.unavailable = KeyStoreException("busy")
+        opened { assertThat(it.failure).isNotNull() }
+        assertThat(storeFile().exists()).isFalse()
+
+        AndroidStorage.startFreshWith(setup())
+        keys.unavailable = null
+
+        opened { opened ->
+            assertThat(opened.failure).isNull()
+            assertThat(opened.store.getString("units", "")).isEqualTo("mmol")
         }
     }
 }

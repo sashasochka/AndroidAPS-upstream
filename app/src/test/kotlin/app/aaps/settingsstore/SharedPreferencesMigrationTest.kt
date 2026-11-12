@@ -125,4 +125,21 @@ class SharedPreferencesMigrationTest {
         assertThat(stored).containsExactly("a", "newer", "b", "old")
         assertThat(marker.exists()).isTrue()
     }
+
+    @Test
+    fun `a marker write that fails leaves no marker, so the next start moves again`() {
+        oldFile.writeText("<map/>")
+        // Something in the way of the marker's temporary file makes the write fail.
+        File(marker.path + ".new").mkdir()
+
+        run(migration(mapOf("a" to "x")))
+
+        assertThat(marker.exists()).isFalse()
+        assertThat(log.last()).contains("Could not finish")
+
+        File(marker.path + ".new").delete()
+        run(migration(mapOf("a" to "x")), current = mapOf("a" to "x"))
+        assertThat(marker.readText()).endsWith("\n")
+        assertThat(File(marker.path + ".new").exists()).isFalse()
+    }
 }

@@ -18,6 +18,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 /**
  * The phone's settings store, opened once, as the first thing the app does. The counterpart of desktop's
@@ -77,6 +78,10 @@ object AndroidStorage {
      * Sets the unreadable store aside and removes its key, so the next start begins with empty settings. The
      * file is renamed, not deleted. Only for a start whose store could not be opened.
      *
+     * When there is a store to set aside, the move of the old settings is marked done first: that store
+     * already holds them, and they must not come back. Without a store file the old settings were never
+     * moved and are still the user's current ones, so the next good open moves them.
+     *
      * Returns the file it was moved to.
      */
     @Synchronized
@@ -109,8 +114,16 @@ object AndroidStorage {
     internal fun startFreshWith(setup: Setup): File {
         val storeFile = File(setup.directory, FILE_NAME)
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date())
-        val setAside = File(setup.directory, "$FILE_NAME.unreadable-$stamp")
-        if (storeFile.exists() && !storeFile.renameTo(setAside)) error("Could not rename ${storeFile.path}")
+        val setAside = File(setup.directory, "$FILE_NAME.unreadable-$stamp-${UUID.randomUUID()}")
+        if (storeFile.exists()) {
+            // A store file means an earlier open moved the old settings into it. Mark that move done before
+            // the store goes: the old settings can be dangerously old (the state of a pump or pod long gone)
+            // and must not come back, even when the store broke before its move was marked. If this write
+            // fails, the store and its key are still untouched.
+            val marker = File(setup.directory, MOVED_MARKER)
+            if (!marker.exists()) SharedPreferencesMigration.writeMarker(marker, "${System.currentTimeMillis()} start-fresh\n")
+            if (!storeFile.renameTo(setAside)) error("Could not rename ${storeFile.path}")
+        }
         setup.keys.delete()
         return setAside
     }

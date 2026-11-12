@@ -4,6 +4,9 @@ import androidx.datastore.core.DataMigration
 import app.aaps.core.interfaces.sharedPreferences.StoreCipher
 import app.aaps.shared.impl.sharedPreferences.StoreCodec
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * Moves the settings from the plain SharedPreferences file that `SPImpl` wrote (until 2026-10) into the
@@ -13,7 +16,7 @@ import java.io.File
  * the settings as they were on the day of the move. The release after that deletes it.
  *
  * "Once" is the [marker] file. It is written after the first good open, also when there was nothing to
- * move, and from then on nothing is moved again: not after starting fresh from an unreadable store, and not
+ * move, or by Start fresh when it sets a store aside, and from then on nothing is moved again: not after starting fresh from an unreadable store, and not
  * when an older version wrote the old file meanwhile. Those settings can be dangerously old - the state of
  * a pump or a pod that is long gone, for example. One exception: an old file that exists but gives no
  * settings at all is not marked as moved, so the next start tries again. SharedPreferences answers a
@@ -73,13 +76,33 @@ class SharedPreferencesMigration(
                 if (differ.isNotEmpty()) log("${differ.size} moved settings read back different: ${differ.sorted().joinToString()}")
                 log("Moved ${moved.size} settings from ${oldFile.name} into the encrypted store, ${moved.size - differ.size} read back the same. The old file is kept for one release.")
             }
-            marker.writeText("${System.currentTimeMillis()} ${moved.size}\n")
+            writeMarker(marker, "${System.currentTimeMillis()} ${moved.size}\n")
         } catch (e: Exception) {
             log("Could not finish the move of the settings, the next start does it again: ${e.message}")
         }
     }
 
     companion object {
+
+        /**
+         * Writes [marker] through a synced temporary file and a rename, so it never exists empty. The marker
+         * only has to exist to stop every later move, so a plain write that failed half way (a full disk, a
+         * power loss) left an empty marker and skipped the move for good. The directory is not synced: if the
+         * rename itself is lost, the marker is missing and the next start moves again, which is the safe side.
+         */
+        internal fun writeMarker(marker: File, text: String) {
+            val pending = File(marker.path + ".new")
+            try {
+                FileOutputStream(pending).use { output ->
+                    output.write(text.toByteArray(Charsets.UTF_8))
+                    output.fd.sync()
+                }
+                Files.move(pending.toPath(), marker.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } catch (e: Exception) {
+                if (pending.isFile) pending.delete()
+                throw e
+            }
+        }
 
         /** The values the store can hold, converted where needed. [skipped] hears about each one that is left behind. */
         internal fun storable(old: Map<String, *>, skipped: (key: String, value: Any) -> Unit): Map<String, Any> =
