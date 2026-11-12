@@ -1,5 +1,6 @@
 package app.aaps.ui.compose.quickLaunch
 
+import app.aaps.core.keys.StringNonKey
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
 
@@ -86,5 +87,15 @@ class QuickLaunchSerializerTest {
     @Test
     fun `an empty array still yields the config entry`() {
         assertThat(QuickLaunchSerializer.fromJson("[]")).isEqualTo(listOf(QuickLaunchAction.QuickLaunchConfig))
+    }
+
+    @Test
+    fun `the stored default reads back as the default toolbar`() {
+        // A user who never changed the toolbar reads this default. Every entry in it must parse,
+        // or the toolbar silently loses it and shows only the configure button.
+        assertThat(QuickLaunchSerializer.fromJson(StringNonKey.QuickLaunchActions.defaultValue))
+            .isEqualTo(QuickLaunchAction.default)
+        assertThat(QuickLaunchSerializer.toJson(QuickLaunchAction.default))
+            .isEqualTo(StringNonKey.QuickLaunchActions.defaultValue)
     }
 }

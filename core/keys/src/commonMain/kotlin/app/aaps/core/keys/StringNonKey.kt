@@ -72,7 +72,7 @@ enum class StringNonKey(
     // Standalone Automation runtime. In core/keys (not the automation module) so the client→master
     // sync publisher/receiver in :plugins:sync can observe it without an inter-module dependency.
     AutomationEvents(key = "AUTOMATION_EVENTS", defaultValue = "", sync = SyncSpec(SyncChannel.Cold, SyncDirection.Bidirectional)),
-    QuickLaunchActions(key = "quick_launch_actions", defaultValue = "[{\"type\":\"wizard\"},{\"type\":\"quick_launch_config\"}]"),
+    QuickLaunchActions(key = "quick_launch_actions", defaultValue = "[{\"type\":\"bolus_wizard\"},{\"type\":\"quick_launch_config\"}]"),
     InsulinConfiguration("insulin_configuration", "{}", sync = SyncSpec(SyncChannel.Cold, SyncDirection.Bidirectional)),
     ComposeGraphConfig("compose_graphconfig", ""),
     // The tab the Statistics screen opens on: the last one used (per-device UI state, not a user-facing preference)
