@@ -48,6 +48,7 @@ import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.core.ui.compose.icons.IcPluginOmnipod
 import app.aaps.core.ui.compose.preference.PreferenceSubScreenDef
 import app.aaps.core.utils.DateTimeUtil
+import app.aaps.pump.omnipod.common.EventOmnipodDashPumpValuesChanged
 import app.aaps.pump.omnipod.common.bledriver.pod.definition.ActivationProgress
 import app.aaps.pump.omnipod.common.bledriver.pod.definition.AlertConfiguration
 import app.aaps.pump.omnipod.common.bledriver.pod.definition.AlertTrigger
@@ -520,6 +521,10 @@ class OmnipodDashPumpPlugin(
             preferences.observe(OmnipodBooleanPreferenceKey.LowReservoirAlert).drop(1).map {},
             preferences.observe(OmnipodIntPreferenceKey.LowReservoirAlertUnits).drop(1).map {},
         ).collectResilient(newScope, aapsLogger, LTag.PUMP) { commandQueue.customCommand(CommandUpdateAlertConfiguration()) }
+        // getPumpStatus is skipped while no pod is active, so refresh the values on every pod state change,
+        // for example when a pod is deactivated or discarded.
+        rxBus.toFlow(EventOmnipodDashPumpValuesChanged::class)
+            .collectResilient(newScope, aapsLogger, LTag.PUMP) { syncPumpFlows() }
     }
 
     override suspend fun onStop() {

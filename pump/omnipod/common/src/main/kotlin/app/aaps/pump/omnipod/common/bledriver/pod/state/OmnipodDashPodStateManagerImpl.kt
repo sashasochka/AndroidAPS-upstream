@@ -986,6 +986,8 @@ class OmnipodDashPodStateManagerImpl(
     override fun reset() {
         podState = PodState()
         store()
+        // Tell listeners, so the pump plugin drops the old pod's reservoir and the screens refresh.
+        rxBus.send(EventOmnipodDashPumpValuesChanged())
     }
 
     private fun store() {
