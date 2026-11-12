@@ -32,17 +32,12 @@ import java.io.File
  * because moving a database after people have data in it is the expensive kind of change. That
  * decision now lives with the shell, where it belongs.
  *
- * ## No migrations here, on purpose
+ * ## Migrations
  *
- * The Android builder passes fifteen `Migration` objects. They are absent here because there is no
- * older database on desktop to come from: nothing imports an Android database, so the first file
- * this creates is created at the current schema version.
- *
- * That covers arriving on desktop. It does not cover staying: once a desktop build reaches a user,
- * their database sits at whatever version shipped, and the next schema change needs a migration path
- * for them like any other. At that point the migration list has to move to commonMain and be passed
- * here too, rather than be copied, because two histories drift and a schema that differs by platform
- * corrupts data instead of failing loudly.
+ * The same `databaseMigrations` from commonMain as Android and Apple, not a copy: two histories drift,
+ * and a schema that differs by platform corrupts data instead of failing loudly. A new desktop file is
+ * created at the current schema version, so they only matter once a desktop database has to follow a
+ * schema change. Without a route Room fails to open the file rather than recreating it empty.
  */
 class JvmAppDatabaseBuilder {
 
@@ -58,13 +53,13 @@ class JvmAppDatabaseBuilder {
             // every platform rather than following whatever the OS happens to ship.
             .setDriver(driver)
             .setQueryCoroutineContext(Dispatchers.IO)
+            .addMigrations(*databaseMigrations)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(connection: SQLiteConnection) {
                     super.onOpen(connection)
                     createCustomIndexes(connection)
                 }
             })
-            .fallbackToDestructiveMigration(false)
             .build()
 
     /**

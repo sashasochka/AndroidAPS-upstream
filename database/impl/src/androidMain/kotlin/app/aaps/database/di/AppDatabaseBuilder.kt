@@ -34,7 +34,6 @@ open class AppDatabaseBuilder {
                     createCustomIndexes(connection)
                 }
             })
-            .fallbackToDestructiveMigration(false)
             .build()
 
     /**
@@ -55,6 +54,5 @@ open class AppDatabaseBuilder {
                     createCustomIndexes(connection)
                 }
             })
-            .fallbackToDestructiveMigration(false)
             .build()
 }

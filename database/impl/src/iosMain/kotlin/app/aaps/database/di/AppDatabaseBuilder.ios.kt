@@ -84,7 +84,6 @@ class IosAppDatabaseBuilder(
                     createCustomIndexes(connection)
                 }
             })
-            .fallbackToDestructiveMigration(false)
             .build()
 
     /**
